@@ -186,7 +186,7 @@ class Nominatim {
 
         return $this->decodeResponse(
             $nRequest->getFormat(),
-            $this->http_client->send($request)
+            $this->http_client->send($this->request)
         );
     }
 
