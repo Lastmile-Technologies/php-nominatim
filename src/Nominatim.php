@@ -24,8 +24,7 @@ use SimpleXMLElement;
  *
  * @see http://wiki.openstreetmap.org/wiki/Nominatim
  */
-class Nominatim
-{
+class Nominatim {
     /**
      * Contain url of the current application.
      *
@@ -75,6 +74,13 @@ class Nominatim
      * @var \maxh\Nominatim\Lookup
      */
     private $baseDetails;
+
+
+    /**
+     * Summary of request
+     * @var  RequestInterface
+     */
+    private $request;
 
     /**
      * Constructor.
@@ -130,8 +136,7 @@ class Nominatim
      *
      * @return \maxh\Nominatim\Search
      */
-    public function newSearch(): Search
-    {
+    public function newSearch(): Search {
         return clone $this->baseSearch;
     }
 
@@ -140,8 +145,7 @@ class Nominatim
      *
      * @return \maxh\Nominatim\Reverse
      */
-    public function newReverse(): Reverse
-    {
+    public function newReverse(): Reverse {
         return clone $this->baseReverse;
     }
 
@@ -150,8 +154,7 @@ class Nominatim
      *
      * @return \maxh\Nominatim\Lookup
      */
-    public function newLookup(): Lookup
-    {
+    public function newLookup(): Lookup {
         return clone $this->baseLookup;
     }
 
@@ -160,8 +163,7 @@ class Nominatim
      *
      * @return \maxh\Nominatim\Details
      */
-    public function newDetails(): Details
-    {
+    public function newDetails(): Details {
         return clone $this->baseDetails;
     }
 
@@ -176,10 +178,32 @@ class Nominatim
      *
      * @return array|SimpleXMLElement The decoded data returned from Nominatim
      */
-    public function find(QueryInterface $nRequest, array $headers = [])
-    {
-        $url = $this->application_url.'/'.$nRequest->getPath().'?';
-        $request = new Request('GET', $url, array_merge($this->defaultHeaders, $headers));
+    public function find(QueryInterface $nRequest, array $headers = []) {
+
+
+
+        $this->createRequest($nRequest, $headers);
+
+        return $this->decodeResponse(
+            $nRequest->getFormat(),
+            $this->http_client->send($request)
+        );
+    }
+
+
+    /**
+     * Summary of create request
+     *
+     * @param QueryInterface $nRequest The object request to send
+     * @param array          $headers  Override the request header
+     *
+     * @throws NominatimException               if no format for decode
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     *
+     */
+    public function createRequest(QueryInterface $nRequest, array $headers = []): void {
+        $url = $this->application_url . '/' . $nRequest->getPath() . '?';
+        $this->request = new Request('GET', $url, array_merge($this->defaultHeaders, $headers));
 
         //Convert the query array to string with space replace to +
         if (method_exists(\GuzzleHttp\Psr7\Query::class, 'build')) {
@@ -188,29 +212,26 @@ class Nominatim
             $query = \GuzzleHttp\Psr7\build_query($nRequest->getQuery(), PHP_QUERY_RFC1738);
         }
 
-        $url = $request->getUri()->withQuery($query);
-        $request = $request->withUri($url);
-
-        return $this->decodeResponse(
-            $nRequest->getFormat(),
-            $request,
-            $this->http_client->send($request)
-        );
+        $this->request = $this->request->withUri($this->request->getUri()->withQuery($query));
     }
 
     /**
      * Return the client using by instance.
      */
-    public function getClient(): Client
-    {
+    public function getClient(): Client {
         return $this->http_client;
+    }
+
+
+
+    public function getRequest(): Request|\Ups\RequestInterface {
+        return $this->request;
     }
 
     /**
      * Decode the data returned from the request.
      *
      * @param string            $format   json or xml
-     * @param RequestInterface  $request  Request object from Guzzle
      * @param ResponseInterface $response Interface response object from Guzzle
      *
      * @throws RuntimeException
@@ -218,8 +239,7 @@ class Nominatim
      *
      * @return array|SimpleXMLElement
      */
-    private function decodeResponse(string $format, RequestInterface $request, ResponseInterface $response)
-    {
+    private function decodeResponse(string $format, ResponseInterface $response) {
         if ('json' === $format || 'jsonv2' === $format || 'geojson' === $format || 'geocodejson' === $format) {
             return json_decode($response->getBody()->getContents(), true);
         }
@@ -228,6 +248,6 @@ class Nominatim
             return new SimpleXMLElement($response->getBody()->getContents());
         }
 
-        throw new NominatimException('Format is undefined or not supported for decode response', $request, $response);
+        throw new NominatimException('Format is undefined or not supported for decode response', $this->request, $response);
     }
 }
